@@ -9,7 +9,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -Werror -O3
 
 SRCS = ./server.c\
-       ./error.c
+       ./listener.c
 
 OBJS = $(SRCS:.c=.o)
 
