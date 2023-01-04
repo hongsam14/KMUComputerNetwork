@@ -17,7 +17,7 @@
 # include "setting.h"
 
 //prompt.c
-int	main_prompt(int sock);
+int	main_prompt(in_addr_t dest, int port_num);
 //connector.c
 int	TCPconnector(int port, in_addr_t dest_addr);
 

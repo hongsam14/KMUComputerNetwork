@@ -22,7 +22,6 @@ int	main(int argc, char *argv[])
 {
 	int	status;
 	int	port_num;
-	int	sock;
 	in_addr_t	dest_addr;
 
 	//arg check
@@ -35,9 +34,6 @@ int	main(int argc, char *argv[])
 	//port number range check
 	assert(port_num > 0 || port_num < 65535);
 	//init connect
-	if ((sock = TCPconnector(port_num, dest_addr)) < 0)
-		exit(1);
-	status = main_prompt(sock);
-	close(sock);
+	status = main_prompt(dest_addr, port_num);
 	return status;
 }

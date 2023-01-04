@@ -1,4 +1,6 @@
 #include <pthread.h>
+#include <string.h>
+#include <stdlib.h>
 
 #include "server.h"
 #include "thread.h"
@@ -9,24 +11,34 @@ static pthread_mutex_t	g_mutex;
 static void	*clnt_thread(void *arg)
 {
 	t_tid	*tid;
+	char	*buffer;
 
 	tid = (t_tid *)arg;
+	if (!(buffer = (char *)malloc(sizeof(char) * BUFFER_SIZE)))
+	{
+		perror("malloc error");
+		pthread_exit(NULL);
+	}
+	memset(buffer, 0, BUFFER_SIZE);
 	//mutex lock
 	pthread_mutex_lock(&g_mutex);
 	tid->free = 0;
 	//mutex unlock
 	pthread_mutex_unlock(&g_mutex);
-	//send data
-	printf("[%d]%d:start.\n", tid->idx, tid->clnt_sock);
-	dprintf(tid->clnt_sock, "[%d]%d:start\n", tid->idx, tid->clnt_sock);
-	for (int i = 0; i < 30; i++)
-	{
-		sleep(1);
-	}
-	dprintf(tid->clnt_sock, "[%d]%d:exit\n", tid->idx, tid->clnt_sock);
+	//receive
+	recv(tid->clnt_sock, buffer, BUFFER_SIZE, 0);
+	//print
+	printf("receive:[%d]%d:%s", tid->idx, tid->clnt_sock, buffer);
+#if 1
+	//delay test
+	sleep(3);
+#endif
+	//print
+	dprintf(tid->clnt_sock, "send:[%d]%d:%s", tid->idx, tid->clnt_sock, buffer);
 	printf("[%d]%d:exit.\n", tid->idx, tid->clnt_sock);
 	//close
 	close(tid->clnt_sock);
+	free(buffer);
 	//mutex lock
 	pthread_mutex_lock(&g_mutex);
 	tid->free = 1;

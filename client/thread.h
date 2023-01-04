@@ -2,19 +2,16 @@
 # define THREAD_H
 
 # include <pthread.h>
+# include <netinet/in.h>
 
 typedef struct s_tid
 {
 	int	idx;
 	int	free;
-	int	buf_size;
+	int	port;
 	char	*buffer;
-	int	clnt_sock;
+	in_addr_t	dest_addr;
 	pthread_t	id;
 }	t_tid;
-
-int	child_proc(int sock, t_tid *tid, int *fd, char *buffer);
-void	parent_proc(int *fd, char *buffer);
-void	free_mutex(void);
 
 #endif
