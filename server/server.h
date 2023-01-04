@@ -7,9 +7,13 @@
 
 # include <unistd.h>
 # include <stdio.h>
+# include <fcntl.h>
 
-# define LISTEN_QUEUE_SIZE 5
+# include "setting.h"
 
+//listener.c
 int	TCPlistener(int port);
+//thread.c
+int	main_thread(int sock);
 
 #endif

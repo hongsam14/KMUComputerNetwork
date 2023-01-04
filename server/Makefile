@@ -9,14 +9,15 @@ CC = gcc
 CFLAGS = -Wall -Wextra -Werror -O3
 
 SRCS = ./server.c\
-       ./listener.c
+       ./listener.c\
+       ./thread.c\
 
 OBJS = $(SRCS:.c=.o)
 
 all : $(NAME)
 
 $(NAME) : $(OBJS)
-	    $(CC) $(CFLAGS) $(OBJS) -o $@
+	    $(CC) $(CFLAGS) $(OBJS) -lpthread -o $@ 
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c $< -o $@
