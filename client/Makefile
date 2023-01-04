@@ -10,6 +10,8 @@ CFLAGS = -Wall -Wextra -Werror -O3
 
 SRCS = ./client.c\
        ./prompt.c\
+       ./connector.c\
+       ./thread.c\
 
 OBJS = $(SRCS:.c=.o)
 

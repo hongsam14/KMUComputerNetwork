@@ -1,46 +1,39 @@
 #include <signal.h>
-#include <stdlib.h>
 #include <string.h>
 
+#include "thread.h"
 #include "client.h"
 
-static void	child_process(int *fd, char *buffer)
+static int	status_control(int status)
 {
-	close(fd[1]);
-	memset(buffer, 0, BUFFER_SIZE);
-	//make thread until EOF
-	while (read(fd[0], buffer, BUFFER_SIZE) != EOF)
+	int	signal;
+
+	if (WIFEXITED(status))
+		return (WEXITSTATUS(status));
+	if (WIFSIGNALED(status))
 	{
-		printf("%s", buffer);
-		memset(buffer, 0, BUFFER_SIZE);
+		signal = WTERMSIG(status);
+		return (128 + signal);
 	}
-	close(fd[0]);
-	free(buffer);
-	exit(0);
+	return (status);
 }
 
-static void	parent_process(int *fd, char *buffer)
+static void	parent_wait(pid_t pid, int *status)
 {
-	close(fd[0]);
-	while (1)
-	{
-		memset(buffer, 0, BUFFER_SIZE);
-		read(0, buffer, BUFFER_SIZE);
-		write(fd[1], buffer, BUFFER_SIZE);
-		//exit when type 'exit'
-		if (!strcmp(buffer, "exit\n"))
-			break;
-	}
-	close(fd[1]);
-	free(buffer);
+	waitpid(pid, status, WUNTRACED);
+	//wait until exited or signaled
+	while (!WIFEXITED(*status) && !WIFSIGNALED(*status))
+		waitpid(pid, status, WUNTRACED);
 }
 
-int	main_prompt(void)
+int	main_prompt(int sock)
 {
+	int	pid;
 	int	fd[2];
-	pid_t	pid;
+	int	wstatus;
 
 	char	*buffer;
+	t_tid	tid[THREAD_POOL_SIZE];
 
 	//init pipe
 	if (pipe(fd) == -1)
@@ -55,8 +48,6 @@ int	main_prompt(void)
 		perror("malloc error");
 		exit(1);
 	}
-	//signal
-	signal(SIGCHLD, SIG_IGN);
 	//fork
 	pid = fork();
 	if (pid == -1)
@@ -66,9 +57,15 @@ int	main_prompt(void)
 	}
 	//child process(thread manager)
 	else if (pid == 0)
-		child_process(fd, buffer);
+	{
+		exit(child_proc(sock, tid, fd, buffer));
+	}
 	//parent process(prompt)
 	else
-		parent_process(fd, buffer);
-	return 1;
+	{
+		parent_proc(fd, buffer);
+		parent_wait(pid, &wstatus);
+		free_mutex();
+	}
+	return status_control(wstatus);
 }

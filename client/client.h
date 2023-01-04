@@ -11,10 +11,14 @@
 # include <unistd.h>
 # include <stdio.h>
 # include <fcntl.h>
+# include <stdlib.h>
+# include <string.h>
 
 # include "setting.h"
 
 //prompt.c
-int	main_prompt(void);
+int	main_prompt(int sock);
+//connector.c
+int	TCPconnector(int port, in_addr_t dest_addr);
 
 #endif
