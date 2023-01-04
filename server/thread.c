@@ -13,11 +13,22 @@ static void	*clnt_thread(void *arg)
 	tid = (t_tid *)arg;
 	//mutex lock
 	pthread_mutex_lock(&g_mutex);
+	tid->free = 0;
+	//mutex unlock
+	pthread_mutex_unlock(&g_mutex);
 	//send data
-	write(tid->clnt_sock, "hello world", 12);
+	printf("[%d]%d:start.\n", tid->idx, tid->clnt_sock);
+	dprintf(tid->clnt_sock, "[%d]%d:start\n", tid->idx, tid->clnt_sock);
+	for (int i = 0; i < 30; i++)
+	{
+		sleep(1);
+	}
+	dprintf(tid->clnt_sock, "[%d]%d:exit\n", tid->idx, tid->clnt_sock);
+	printf("[%d]%d:exit.\n", tid->idx, tid->clnt_sock);
 	//close
-	printf("%d is exit.\n", tid->clnt_sock);
 	close(tid->clnt_sock);
+	//mutex lock
+	pthread_mutex_lock(&g_mutex);
 	tid->free = 1;
 	//mutex unlock
 	pthread_mutex_unlock(&g_mutex);
@@ -34,7 +45,10 @@ static int	init_(pthread_mutex_t *mutex, t_tid *tid_lst)
 	}
 	//init tid lst
 	for (int i = 0; i < THREAD_POOL_SIZE; i++)
+	{
+		tid_lst[i].idx = i;
 		tid_lst[i].free = 1;
+	}
 	return 1;
 }
 
@@ -50,7 +64,7 @@ static int	pigeon_hole(const t_tid *tid)
 			idx++;
 		if (idx < THREAD_POOL_SIZE)
 			break;
-		sleep(10);
+		sleep(1);
 	}
 	return idx;
 }

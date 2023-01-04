@@ -3,10 +3,9 @@
 
 # include <pthread.h>
 
-# define THREAD_POOL_SIZE 10
-
 typedef struct s_tid
 {
+	int	idx;
 	int	free;
 	int	clnt_sock;
 	pthread_t	id;

@@ -9,7 +9,7 @@
 # include <stdio.h>
 # include <fcntl.h>
 
-# define LISTEN_QUEUE_SIZE 5
+# include "setting.h"
 
 //listener.c
 int	TCPlistener(int port);
