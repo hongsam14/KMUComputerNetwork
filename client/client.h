@@ -5,13 +5,16 @@
 # include <sys/socket.h>
 //https://man7.org/linux/man-pages/man7/ip.7.html
 # include <netinet/in.h>
-
+//https://linux.die.net/man/3/inet_addr
 # include <arpa/inet.h>
 
 # include <unistd.h>
 # include <stdio.h>
 # include <fcntl.h>
 
+# include "setting.h"
 
+//prompt.c
+int	main_prompt(void);
 
 #endif

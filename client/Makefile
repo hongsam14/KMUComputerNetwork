@@ -9,6 +9,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -Werror -O3
 
 SRCS = ./client.c\
+       ./prompt.c\
 
 OBJS = $(SRCS:.c=.o)
 
