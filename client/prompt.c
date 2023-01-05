@@ -17,6 +17,7 @@ static void	*clnt_thread(void *arg)
 	struct in_addr	tmp;
 
 	tid =  (t_tid *)arg;
+	dprintf(2, "childThread: %d\n", getpid());
 	//mutex lock. change free flag.
 	pthread_mutex_lock(&g_mutex);
 	
@@ -31,7 +32,7 @@ static void	*clnt_thread(void *arg)
 	pthread_mutex_unlock(&g_mutex);
 	
 	//send data
-	printf("send:%s", send_buf);
+	dprintf(2, "send:%s", send_buf);
 	if (send(sock, send_buf, BUFFER_SIZE, 0) < 0)
 	{
 		perror("send failed");
@@ -147,7 +148,7 @@ static int	set_tid(t_tid *tid, in_addr_t dest, int port, char *buffer)
 	return 1;
 }
 
-static int	child_proc(in_addr_t dest, int port_num, int *fd)
+static void	child_proc(in_addr_t dest, int port_num, int *fd)
 {
 	int	result;
 
@@ -155,10 +156,12 @@ static int	child_proc(in_addr_t dest, int port_num, int *fd)
 	char	*buffer;
 	t_tid	tid[THREAD_POOL_SIZE];
 
+	//delay
+	sleep(1);
 	if (!(buffer = (char *)malloc(sizeof(char) * BUFFER_SIZE)))
 	{
 		perror("malloc error");
-		return 1;
+		exit(1);
 	}
 	memset(buffer, 0, BUFFER_SIZE);
 	close(fd[1]);
@@ -168,7 +171,7 @@ static int	child_proc(in_addr_t dest, int port_num, int *fd)
 	if (init_(&g_mutex, tid) < 0)
 	{
 		perror("mutex allocate error");
-		return 1;
+		exit(1);
 	}
 	while (read(0, buffer, BUFFER_SIZE) != EOF)
 	{
@@ -180,23 +183,26 @@ static int	child_proc(in_addr_t dest, int port_num, int *fd)
 		//make send thread
 		result = set_tid(&tid[t_idx], dest, port_num, buffer);
 		if (result < 0)
-			return 1;
+			exit(1);
 		if (!result)
 		{
 			perror("wrong form. please input 'method-url' form\n");
-			return 1;
+			memset(buffer, 0, BUFFER_SIZE);
+			continue;
 		}
 		//thread start
 		if ((pthread_create(&(tid[t_idx].id), NULL, clnt_thread, &tid[t_idx])))
 		{
 			perror("failed to create thread.");
-			return 1;
+			exit(1);
 		}
 		pthread_detach(tid[t_idx].id);
 		memset(buffer, 0, BUFFER_SIZE);
 	}
 	close(fd[0]);
-	return 0;
+	free(buffer);
+	pthread_mutex_destroy(&g_mutex);
+	exit(0);
 }
 
 static void	parent_proc(int *fd)
@@ -240,14 +246,6 @@ static int	status_control(int status)
 	return (status);
 }
 
-static void	parent_wait(pid_t pid, int *status)
-{
-	waitpid(pid, status, WUNTRACED);
-	//wait until exited or signaled
-	while (!WIFEXITED(*status) && !WIFSIGNALED(*status))
-		waitpid(pid, status, WUNTRACED);
-}
-
 int	main_prompt(in_addr_t dest, int port_num)
 {
 	pid_t	pid;
@@ -255,6 +253,7 @@ int	main_prompt(in_addr_t dest, int port_num)
 	int	wstatus;
 
 	//init pipe
+	wstatus = 0;
 	if (pipe(fd) == -1)
 	{
 		perror("pipe error");
@@ -270,14 +269,15 @@ int	main_prompt(in_addr_t dest, int port_num)
 	//child process(thread manager)
 	else if (pid == 0)
 	{
-		exit(child_proc(dest, port_num, fd));
+		dprintf(2, "childPid: %d\n", getpid());
+		child_proc(dest, port_num, fd);
 	}
 	//parent process(prompt)
 	else
 	{
+		dprintf(2, "parentPid: %d\n", getpid());
 		parent_proc(fd);
-		parent_wait(pid, &wstatus);
-		pthread_mutex_destroy(&g_mutex);
+		waitpid(pid, &wstatus, WUNTRACED);
 	}
 	return status_control(wstatus);
 }

@@ -28,14 +28,13 @@ static void	*clnt_thread(void *arg)
 	//receive
 	recv(tid->clnt_sock, buffer, BUFFER_SIZE, 0);
 	//print
-	printf("receive:[%d]%d:%s", tid->idx, tid->clnt_sock, buffer);
+	dprintf(2, "receive:%s", buffer);
 #if 0
 	//delay test
 	sleep(3);
 #endif
-	//print
-	dprintf(tid->clnt_sock, "send:[%d]%d:%s", tid->idx, tid->clnt_sock, buffer);
-	printf("[%d]%d:exit.\n", tid->idx, tid->clnt_sock);
+	//send
+	dprintf(tid->clnt_sock, "%s", buffer);
 	//close
 	close(tid->clnt_sock);
 	free(buffer);

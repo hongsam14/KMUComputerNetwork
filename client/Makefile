@@ -6,7 +6,7 @@
 NAME = Client
 
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -O3
+CFLAGS = -Wall -Wextra -Werror -fsanitize=address -O3
 
 SRCS = ./client.c\
        ./prompt.c\

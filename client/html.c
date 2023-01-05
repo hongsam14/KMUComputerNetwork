@@ -27,7 +27,7 @@ char	*head_builder(char *method, char *url, char *addr)
 	if (!(header = (char *)malloc(sizeof(char) * HEADER_LEN)))
 		return NULL;
 	memset(header, 0, HEADER_LEN);
-	sprintf(header, HEADER_FORMAT, method, url, addr);
+	snprintf(header, HEADER_LEN, HEADER_FORMAT, method, url, addr);
 	cpy_to_header(header, "\r\n");
 	return header;
 }
