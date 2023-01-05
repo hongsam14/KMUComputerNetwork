@@ -4,6 +4,7 @@
 
 #include "server.h"
 #include "thread.h"
+#include "html.h"
 
 static pthread_mutex_t	g_mutex;
 
@@ -12,6 +13,7 @@ static void	*clnt_thread(void *arg)
 {
 	t_tid	*tid;
 	char	*buffer;
+	char	*out_buf;
 
 	tid = (t_tid *)arg;
 	if (!(buffer = (char *)malloc(sizeof(char) * BUFFER_SIZE)))
@@ -25,22 +27,31 @@ static void	*clnt_thread(void *arg)
 	tid->free = 0;
 	//mutex unlock
 	pthread_mutex_unlock(&g_mutex);
+	
 	//receive
 	recv(tid->clnt_sock, buffer, BUFFER_SIZE, 0);
 	//print
 	dprintf(2, "receive:%s", buffer);
-#if 0
-	//delay test
-	sleep(3);
-#endif
+	
+	//parsing
+	pthread_mutex_lock(&g_mutex);
+	protocol_reader(buffer, tid);
+	pthread_mutex_unlock(&g_mutex);
+	
 	//send
-	dprintf(tid->clnt_sock, "%s", buffer);
-	//close
+	out_buf = head_builder(0);
+	dprintf(tid->clnt_sock, "%s", out_buf);
+	
+	//close and free
 	close(tid->clnt_sock);
 	free(buffer);
+	free(out_buf);
 	//mutex lock
 	pthread_mutex_lock(&g_mutex);
 	tid->free = 1;
+	tid->method = 0;
+	free(tid->url);
+	tid->url = 0;
 	//mutex unlock
 	pthread_mutex_unlock(&g_mutex);
 	pthread_exit(NULL);
@@ -59,6 +70,8 @@ static int	init_(pthread_mutex_t *mutex, t_tid *tid_lst)
 	{
 		tid_lst[i].idx = i;
 		tid_lst[i].free = 1;
+		tid_lst[i].method = 0;
+		tid_lst[i].url = 0;
 	}
 	return 1;
 }

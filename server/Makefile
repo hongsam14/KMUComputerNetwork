@@ -6,11 +6,12 @@
 NAME = Server
 
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -O3
+CFLAGS = -Wall -Wextra -Werror -fsanitize=address -O3
 
 SRCS = ./server.c\
        ./listener.c\
        ./thread.c\
+       ./html.c\
 
 OBJS = $(SRCS:.c=.o)
 
