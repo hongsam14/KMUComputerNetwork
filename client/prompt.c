@@ -39,7 +39,8 @@ static void	*clnt_thread(void *arg)
 		perror("send failed");
 		exit(1);
 	}
-	
+	//free send_buf
+	free(send_buf);
 	//malloc outbuffer
 	if (!(out_buf = (char *)malloc(sizeof(char) * BUFFER_SIZE)))
 	{
@@ -98,13 +99,26 @@ static int	pigeon_hole(const t_tid *tid)
 	while (1)
 	{
 		idx = 0;
-		while (!(tid[idx].free) && idx < THREAD_POOL_SIZE)
+		while (idx < THREAD_POOL_SIZE && !(tid[idx].free))
 			idx++;
 		if (idx < THREAD_POOL_SIZE)
 			break;
 		sleep(1);
 	}
 	return idx;
+}
+
+static int	check_pigeon_hole(const t_tid *tid)
+{
+	int	pig_cnt;
+
+	pig_cnt = 0;
+	for (int i = 0; i < THREAD_POOL_SIZE; i++)
+	{
+		if (!tid[i].free)
+			pig_cnt++;
+	}
+	return pig_cnt;
 }
 
 static int	set_tid(t_tid *tid, in_addr_t dest, int port, char *buffer)
@@ -200,6 +214,12 @@ static void	child_proc(in_addr_t dest, int port_num, int *fd)
 		pthread_detach(tid[t_idx].id);
 		memset(buffer, 0, BUFFER_SIZE);
 	}
+	//check pigeon hole
+	while (check_pigeon_hole(tid))
+	{
+		sleep(1);
+	}
+	//free
 	close(fd[0]);
 	free(buffer);
 	pthread_mutex_destroy(&g_mutex);
