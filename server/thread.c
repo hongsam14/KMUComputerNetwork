@@ -29,7 +29,7 @@ static void	*clnt_thread(void *arg)
 	recv(tid->clnt_sock, buffer, BUFFER_SIZE, 0);
 	//print
 	printf("receive:[%d]%d:%s", tid->idx, tid->clnt_sock, buffer);
-#if 1
+#if 0
 	//delay test
 	sleep(3);
 #endif

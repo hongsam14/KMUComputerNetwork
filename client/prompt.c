@@ -2,6 +2,7 @@
 
 #include "thread.h"
 #include "client.h"
+#include "html.h"
 
 static pthread_mutex_t	g_mutex;
 
@@ -10,23 +11,33 @@ static void	*clnt_thread(void *arg)
 {
 	int	sock;
 	t_tid	*tid;
+	char	*send_buf;
 	char	*out_buf;
+
+	struct in_addr	tmp;
 
 	tid =  (t_tid *)arg;
 	//mutex lock. change free flag.
 	pthread_mutex_lock(&g_mutex);
+	
 	tid->free = 0;
-	//mutex unlock
-	pthread_mutex_unlock(&g_mutex);
-	//send data
 	if ((sock = TCPconnector(tid->port, tid->dest_addr)) < 0)
 		exit(1);
-	printf("send:%s", tid->buffer);
-	if (send(sock, tid->buffer, BUFFER_SIZE, 0) < 0)
+	//make http header
+	tmp.s_addr = tid->dest_addr;
+	send_buf = head_builder(tid->method, tid->url, inet_ntoa(tmp));
+	
+	//mutex unlock
+	pthread_mutex_unlock(&g_mutex);
+	
+	//send data
+	printf("send:%s", send_buf);
+	if (send(sock, send_buf, BUFFER_SIZE, 0) < 0)
 	{
 		perror("send failed");
 		exit(1);
 	}
+	
 	//malloc outbuffer
 	if (!(out_buf = (char *)malloc(sizeof(char) * BUFFER_SIZE)))
 	{
@@ -34,6 +45,7 @@ static void	*clnt_thread(void *arg)
 		exit(1);
 	}
 	memset(out_buf, 0, BUFFER_SIZE);
+	
 	//receive
 	if (recv(sock, out_buf, BUFFER_SIZE, 0) < 0)
 	{
@@ -41,12 +53,16 @@ static void	*clnt_thread(void *arg)
 		exit(1);
 	}
 	printf("receive:%s", out_buf);
+	
 	free(out_buf);
 	//mutex lock
 	pthread_mutex_lock(&g_mutex);
+	//clear
 	tid->free = 1;
-	free(tid->buffer);
-	tid->buffer = 0;
+	free(tid->method);
+	free(tid->url);
+	tid->method = 0;
+	tid->url = 0;
 	//mutex unlock
 	pthread_mutex_unlock(&g_mutex);
 	close(sock);
@@ -66,7 +82,8 @@ static int	init_(pthread_mutex_t *mutex, t_tid *tid_lst)
 	{
 		tid_lst[i].idx = i;
 		tid_lst[i].free = 1;
-		tid_lst[i].buffer = 0;
+		tid_lst[i].method = 0;
+		tid_lst[i].url = 0;
 	}
 	return 1;
 }
@@ -88,8 +105,52 @@ static int	pigeon_hole(const t_tid *tid)
 	return idx;
 }
 
+static int	set_tid(t_tid *tid, in_addr_t dest, int port, char *buffer)
+{
+	char	*tok;
+	char	*tmp[2];
+	char	*d_idx;
+	char	*o_idx;
+	size_t	size;
+
+	tmp[0] = 0;
+	tmp[1] = 0;
+	//make send thread
+	tid->dest_addr = dest;
+	tid->port = port;
+	//split
+	tok = strtok(buffer, "-");
+	for (int i = 0; tok != NULL; i++)
+	{
+		size = strlen(tok) + 1;
+		tmp[i] = (char *)malloc(sizeof(char) * size);
+		memset(tmp[i], 0, size);
+		if (!tmp[i])
+		{
+			perror("malloc error. ");
+			return -1;
+		}
+		d_idx = tmp[i];
+		o_idx = tok;
+		while (*o_idx != '\0' && *o_idx != '\n')
+		{
+			*d_idx = *o_idx;
+			o_idx++;
+			d_idx++;
+		}
+		tok = strtok(NULL, "-");
+	}
+	if (!tmp[0] || !tmp[1])
+		return 0;
+	tid->method = tmp[0];
+	tid->url = tmp[1];
+	return 1;
+}
+
 static int	child_proc(in_addr_t dest, int port_num, int *fd)
 {
+	int	result;
+
 	int	t_idx;
 	char	*buffer;
 	t_tid	tid[THREAD_POOL_SIZE];
@@ -99,6 +160,7 @@ static int	child_proc(in_addr_t dest, int port_num, int *fd)
 		perror("malloc error");
 		return 1;
 	}
+	memset(buffer, 0, BUFFER_SIZE);
 	close(fd[1]);
 	//copy fd
 	dup2(fd[0], 0);
@@ -108,30 +170,29 @@ static int	child_proc(in_addr_t dest, int port_num, int *fd)
 		perror("mutex allocate error");
 		return 1;
 	}
-	memset(buffer, 0, BUFFER_SIZE);
 	while (read(0, buffer, BUFFER_SIZE) != EOF)
 	{
-		printf("%s\n", buffer);
 		//exit when type 'stop'
 		if (!strcmp(buffer, "stop\n") || !strcmp(buffer, "exit\n"))
 			break;
 		//wait for thread is free
 		t_idx = pigeon_hole(tid);
 		//make send thread
-		tid[t_idx].dest_addr = dest;
-		tid[t_idx].port = port_num;
-		tid[t_idx].buffer = buffer;
+		result = set_tid(&tid[t_idx], dest, port_num, buffer);
+		if (result < 0)
+			return 1;
+		if (!result)
+		{
+			perror("wrong form. please input 'method-url' form\n");
+			return 1;
+		}
+		//thread start
 		if ((pthread_create(&(tid[t_idx].id), NULL, clnt_thread, &tid[t_idx])))
 		{
 			perror("failed to create thread.");
 			return 1;
 		}
 		pthread_detach(tid[t_idx].id);
-		if (!(buffer = (char *)malloc(sizeof(char) * BUFFER_SIZE)))
-		{
-			perror("malloc error");
-			return 1;
-		}
 		memset(buffer, 0, BUFFER_SIZE);
 	}
 	close(fd[0]);
