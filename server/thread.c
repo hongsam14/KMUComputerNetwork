@@ -84,7 +84,7 @@ static int	pigeon_hole(const t_tid *tid)
 	while (1)
 	{
 		idx = 0;
-		while (!(tid[idx].free) && idx < THREAD_POOL_SIZE)
+		while (idx < THREAD_POOL_SIZE && !(tid[idx].free))
 			idx++;
 		if (idx < THREAD_POOL_SIZE)
 			break;

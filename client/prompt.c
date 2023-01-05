@@ -1,4 +1,6 @@
 #include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "thread.h"
 #include "client.h"
@@ -17,9 +19,9 @@ static void	*clnt_thread(void *arg)
 	struct in_addr	tmp;
 
 	tid =  (t_tid *)arg;
-	dprintf(2, "childThread: %d\n", getpid());
 	//mutex lock. change free flag.
 	pthread_mutex_lock(&g_mutex);
+	dprintf(2, "childThread: %d\n", getpid());
 	
 	tid->free = 0;
 	if ((sock = TCPconnector(tid->port, tid->dest_addr)) < 0)
@@ -28,11 +30,10 @@ static void	*clnt_thread(void *arg)
 	tmp.s_addr = tid->dest_addr;
 	send_buf = head_builder(tid->method, tid->url, inet_ntoa(tmp));
 	
+	dprintf(2, "send:%s", send_buf);
 	//mutex unlock
 	pthread_mutex_unlock(&g_mutex);
-	
 	//send data
-	dprintf(2, "send:%s", send_buf);
 	if (send(sock, send_buf, BUFFER_SIZE, 0) < 0)
 	{
 		perror("send failed");
@@ -53,13 +54,12 @@ static void	*clnt_thread(void *arg)
 		perror("receive failed");
 		exit(1);
 	}
-	printf("receive:%s", out_buf);
-	
-	free(out_buf);
 	//mutex lock
 	pthread_mutex_lock(&g_mutex);
+	printf("receive:%s", out_buf);
 	//clear
 	tid->free = 1;
+	free(out_buf);
 	free(tid->method);
 	free(tid->url);
 	tid->method = 0;
@@ -68,6 +68,7 @@ static void	*clnt_thread(void *arg)
 	pthread_mutex_unlock(&g_mutex);
 	close(sock);
 	pthread_exit(NULL);
+	return 0;
 }
 
 static int	init_(pthread_mutex_t *mutex, t_tid *tid_lst)
@@ -208,6 +209,7 @@ static void	child_proc(in_addr_t dest, int port_num, int *fd)
 static void	parent_proc(int *fd)
 {
 	char	*buffer;
+	ssize_t	size_;
 	
 	if (!(buffer = (char *)malloc(sizeof(char) * BUFFER_SIZE)))
 	{
@@ -221,8 +223,8 @@ static void	parent_proc(int *fd)
 	while (1)
 	{
 		memset(buffer, 0, BUFFER_SIZE);
-		read(0, buffer, BUFFER_SIZE);
-		write(1, buffer, BUFFER_SIZE);
+		size_ = read(0, buffer, BUFFER_SIZE);
+		size_ = write(1, buffer, size_);
 		//exit when type 'exit'
 		if (!strcmp(buffer, "exit\n"))
 			break;
