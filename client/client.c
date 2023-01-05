@@ -27,7 +27,8 @@ int	main(int argc, char *argv[])
 	//arg check
 	assert(argc == 3);
 	//init ip address
-	assert(check_ip(argv[1]) != NULL);
+	//assert(check_ip(argv[1]) != NULL);
+	check_ip(argv[1]);
 	dest_addr = inet_addr(argv[1]);
 	//init port number
 	port_num = atoi(argv[2]);

@@ -8,6 +8,10 @@ typedef struct s_tid
 	int	idx;
 	int	free;
 	int	clnt_sock;
+	//protocol
+	int	method;
+	char	*url;
+	//thread
 	pthread_t	id;
 }	t_tid;
 
