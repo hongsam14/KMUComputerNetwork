@@ -17,26 +17,20 @@ int	TCPconnector(int port, in_addr_t dest_addr, t_queue *queue)
 	struct sockaddr_in	sin;
 
 	sock = 0;
-	switch (1)
+	if (!strcmp(HTTP_VERSION, "1.1") && queue->size > 0)
+		sock = get_head(queue);
+	else
 	{
-		case !strcmp(HTTP_VERSION, "1.1"):
-			if (queue->size > 0)
-			{
-				sock = get_head(queue);
-				break;
-			}
-		case !strcmp(HTTP_VERSION, "1.0"):
-		default:
-			//init socket
-			sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-			//init addr
-			init_IPV4sockaddr(&sin, port, dest_addr);
-			//connect
-			if ((connect(sock, (struct sockaddr *)&sin, sizeof(sin))) < 0)
-			{
-				perror("connection error");
-				return -1;
-			}
+		//init socket
+		sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+		//init addr
+		init_IPV4sockaddr(&sin, port, dest_addr);
+		//connect
+		if ((connect(sock, (struct sockaddr *)&sin, sizeof(sin))) < 0)
+		{
+			perror("connection error");
+			return -1;
+		}
 	}
 	return sock;
 }
