@@ -2,7 +2,8 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "html.h"
+#include "http.h"
+#include "setting.h"
 
 static char	*cpy_to_header(char *header, char *str)
 {
@@ -27,7 +28,7 @@ char	*head_builder(char *method, char *url, char *addr)
 	if (!(header = (char *)malloc(sizeof(char) * HEADER_LEN)))
 		return NULL;
 	memset(header, 0, HEADER_LEN);
-	snprintf(header, HEADER_LEN, HEADER_FORMAT, method, url, addr);
+	snprintf(header, HEADER_LEN, HEADER_FORMAT, method, url, HTTP_VERSION, addr);
 	cpy_to_header(header, "\r\n");
 	return header;
 }

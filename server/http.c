@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#include "html.h"
+#include "http.h"
 
 static char	*cpy_to_header(char *header, char *str)
 {
@@ -21,7 +21,20 @@ static char	*cpy_to_header(char *header, char *str)
 	return idx;
 }
 
-char	*head_builder(int status)
+static char	*ver_str(int ver)
+{
+	switch (ver)
+	{
+		case VER_1_1:
+			return "1.1";
+		case VER_1:
+		default:
+			return "1.0";
+	}
+	return 0;
+}
+
+char	*head_builder(int ver, int status)
 {
 	char	*header;
 
@@ -31,17 +44,17 @@ char	*head_builder(int status)
 	switch (status)
 	{
 		case NOT_FOUND:
-			snprintf(header, HEADER_LEN, HEADER_FORMAT, "404 Not Found");
+			snprintf(header, HEADER_LEN, HEADER_FORMAT, ver_str(ver), "404 Not Found");
 			break;
 		case FORBIDDEN:
-			snprintf(header, HEADER_LEN, HEADER_FORMAT, "403 Forbidden");
+			snprintf(header, HEADER_LEN, HEADER_FORMAT, ver_str(ver), "403 Forbidden");
 			break;
-
 		case BAD_REQUEST:
-			snprintf(header, HEADER_LEN, HEADER_FORMAT, "400 Bad Request");
+			snprintf(header, HEADER_LEN, HEADER_FORMAT, ver_str(ver), "400 Bad Request");
 			break;
+		case OK:
 		default:
-			snprintf(header, HEADER_LEN, HEADER_FORMAT, "200 OK");
+			snprintf(header, HEADER_LEN, HEADER_FORMAT, ver_str(ver), "200 OK");
 	}
 	cpy_to_header(header, "\r\n");
 	return header;
@@ -50,6 +63,7 @@ char	*head_builder(int status)
 int	protocol_reader(const char *req, t_tid *tid)
 {
 	char	m_tmp[10];
+	char	v_tmp[4];
 	char	*u_tmp;
 	char	h_tmp[20];
 
@@ -58,17 +72,22 @@ int	protocol_reader(const char *req, t_tid *tid)
 		perror("malloc error");
 		return -1;
 	}
-	sscanf(req, "%s %s HTTP/1.1\r\nHost: %s\r\n", m_tmp, u_tmp, h_tmp);
+	sscanf(req, "%s %s HTTP/%s\r\nHost: %s\r\n", m_tmp, u_tmp, v_tmp, h_tmp);
 	//put data to tid
-	if (!strcmp(m_tmp, "GET"))
-		tid->method = GET;
-	else if (!strcmp(m_tmp, "HEAD"))
+	if (!strcmp(m_tmp, "HEAD"))
 		tid->method = HEAD;
 	else if (!strcmp(m_tmp, "POST"))
 		tid->method = POST;
 	else if (!strcmp(m_tmp, "PUT"))
 		tid->method = PUT;
-	//else 0
+	else if (!strcmp(m_tmp, "GET"))
+		tid->method = GET;
+
+	if (!strcmp(v_tmp, "1.1"))
+		tid->ver = VER_1_1;
+	else if (!strcmp(v_tmp, "1.0"))
+		tid->ver = VER_1;
+	//url
 	tid->url = u_tmp;
 	return 0;
 }

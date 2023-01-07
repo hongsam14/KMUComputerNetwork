@@ -15,10 +15,19 @@
 # include <string.h>
 
 # include "setting.h"
+# include "queue.h"
+# include "thread.h"
+
+typedef struct s_info
+{
+	t_queue	*queue;
+	t_tid	*tid;
+}	t_info;
 
 //prompt.c
 int	main_prompt(in_addr_t dest, int port_num);
 //connector.c
-int	TCPconnector(int port, in_addr_t dest_addr);
+int	TCPconnector(int port, in_addr_t dest_addr, t_queue *queue);
+void	disconnector(t_queue *queue, int sock);
 
 #endif

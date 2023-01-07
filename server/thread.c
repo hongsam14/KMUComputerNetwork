@@ -4,7 +4,7 @@
 
 #include "server.h"
 #include "thread.h"
-#include "html.h"
+#include "http.h"
 
 static pthread_mutex_t	g_mutex;
 
@@ -37,13 +37,19 @@ static void	*clnt_thread(void *arg)
 	pthread_mutex_lock(&g_mutex);
 	protocol_reader(buffer, tid);
 	pthread_mutex_unlock(&g_mutex);
-	
+	//test delay
+#if 1
+	sleep(5);
+#endif
+
 	//send
-	out_buf = head_builder(0);
+	out_buf = head_builder(tid->ver, 0);
 	dprintf(tid->clnt_sock, "%s", out_buf);
 	
-	//close and free
+	//close socket
 	close(tid->clnt_sock);
+	
+	//close and free
 	free(buffer);
 	free(out_buf);
 	//mutex lock
@@ -71,6 +77,7 @@ static int	init_(pthread_mutex_t *mutex, t_tid *tid_lst)
 		tid_lst[i].idx = i;
 		tid_lst[i].free = 1;
 		tid_lst[i].method = 0;
+		tid_lst[i].ver = 0;
 		tid_lst[i].url = 0;
 	}
 	return 1;

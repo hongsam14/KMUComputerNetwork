@@ -2,11 +2,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "thread.h"
 #include "client.h"
-#include "html.h"
+#include "http.h"
 
-static pthread_mutex_t	g_mutex;
+static pthread_mutex_t	g_stream_mutex;
+static pthread_mutex_t	g_mem_mutex;
 
 //thread
 static void	*clnt_thread(void *arg)
@@ -17,30 +17,50 @@ static void	*clnt_thread(void *arg)
 	char	*out_buf;
 
 	struct in_addr	tmp;
+	t_queue	*queue;
+	t_node	*node;
 
-	tid =  (t_tid *)arg;
-	//mutex lock. change free flag.
-	pthread_mutex_lock(&g_mutex);
-	dprintf(2, "childThread: %d\n", getpid());
+	tid =  ((t_info *)arg)->tid;
+	queue = ((t_info *)arg)->queue;
 	
+	//mutex lock. change free flag.
+	pthread_mutex_lock(&g_stream_mutex);
+	dprintf(2, "childThread: %d\n", tid->idx);
+	pthread_mutex_unlock(&g_stream_mutex);
+	
+	pthread_mutex_lock(&g_mem_mutex);
 	tid->free = 0;
-	if ((sock = TCPconnector(tid->port, tid->dest_addr)) < 0)
+	//socket
+	if ((sock = TCPconnector(tid->port, tid->dest_addr, queue)) < 0)
 		exit(1);
+	//add to queue
+	if (!(node = (t_node *)malloc(sizeof(t_node))))
+	{
+		perror("malloc error");
+		exit(1);
+	}
+	node->sock = sock;
+	node->next = NULL;
+	//enqueue
+	enqueue(queue, node);
+	pthread_mutex_unlock(&g_mem_mutex);
+	
 	//make http header
 	tmp.s_addr = tid->dest_addr;
 	send_buf = head_builder(tid->method, tid->url, inet_ntoa(tmp));
 	
-	dprintf(2, "send:%s", send_buf);
-	//mutex unlock
-	pthread_mutex_unlock(&g_mutex);
+	pthread_mutex_lock(&g_stream_mutex);
+	dprintf(2, "sock:%d send:%s", sock, send_buf);
+	pthread_mutex_unlock(&g_stream_mutex);
+	
 	//send data
 	if (send(sock, send_buf, BUFFER_SIZE, 0) < 0)
 	{
 		perror("send failed");
 		exit(1);
 	}
-	//free send_buf
 	free(send_buf);
+	
 	//malloc outbuffer
 	if (!(out_buf = (char *)malloc(sizeof(char) * BUFFER_SIZE)))
 	{
@@ -56,30 +76,44 @@ static void	*clnt_thread(void *arg)
 		exit(1);
 	}
 	//mutex lock
-	pthread_mutex_lock(&g_mutex);
+	pthread_mutex_lock(&g_stream_mutex);
 	printf("receive:%s", out_buf);
+	pthread_mutex_unlock(&g_stream_mutex);
+	
 	//clear
+	pthread_mutex_lock(&g_mem_mutex);
 	tid->free = 1;
 	free(out_buf);
 	free(tid->method);
 	free(tid->url);
 	tid->method = 0;
 	tid->url = 0;
-	//mutex unlock
-	pthread_mutex_unlock(&g_mutex);
-	close(sock);
+	//dequeue
+	dequeue(queue);
+	pthread_mutex_unlock(&g_mem_mutex);
+	
+	//close socket
+	disconnector(queue, sock);;
+	
 	pthread_exit(NULL);
 	return 0;
 }
 
-static int	init_(pthread_mutex_t *mutex, t_tid *tid_lst)
+static int	init_(t_tid *tid_lst, t_queue *queue)
 {
 	//init mutex
-	if (pthread_mutex_init(mutex, NULL))
+	if (pthread_mutex_init(&g_stream_mutex, NULL))
 	{
 		perror("mutex init failed");
 		return -1;
 	}
+	if (pthread_mutex_init(&g_mem_mutex, NULL))
+	{
+		perror("mutex init failed");
+		return -1;
+	}
+	//init queue
+	init_queue(queue);
 	//init tid lst
 	for (int i = 0; i < THREAD_POOL_SIZE; i++)
 	{
@@ -99,26 +133,13 @@ static int	pigeon_hole(const t_tid *tid)
 	while (1)
 	{
 		idx = 0;
-		while (idx < THREAD_POOL_SIZE && !(tid[idx].free))
+		while (!(tid[idx].free) && idx < THREAD_POOL_SIZE)
 			idx++;
 		if (idx < THREAD_POOL_SIZE)
 			break;
 		sleep(1);
 	}
 	return idx;
-}
-
-static int	check_pigeon_hole(const t_tid *tid)
-{
-	int	pig_cnt;
-
-	pig_cnt = 0;
-	for (int i = 0; i < THREAD_POOL_SIZE; i++)
-	{
-		if (!tid[i].free)
-			pig_cnt++;
-	}
-	return pig_cnt;
 }
 
 static int	set_tid(t_tid *tid, in_addr_t dest, int port, char *buffer)
@@ -169,7 +190,10 @@ static void	child_proc(in_addr_t dest, int port_num, int *fd)
 
 	int	t_idx;
 	char	*buffer;
+	
 	t_tid	tid[THREAD_POOL_SIZE];
+	t_queue	queue;
+	t_info	info;
 
 	//delay
 	sleep(1);
@@ -183,7 +207,7 @@ static void	child_proc(in_addr_t dest, int port_num, int *fd)
 	//copy fd
 	dup2(fd[0], 0);
 	//init
-	if (init_(&g_mutex, tid) < 0)
+	if (init_(tid, &queue) < 0)
 	{
 		perror("mutex allocate error");
 		exit(1);
@@ -195,7 +219,7 @@ static void	child_proc(in_addr_t dest, int port_num, int *fd)
 			break;
 		//wait for thread is free
 		t_idx = pigeon_hole(tid);
-		//make send thread
+		//judge stdin cmd
 		result = set_tid(&tid[t_idx], dest, port_num, buffer);
 		if (result < 0)
 			exit(1);
@@ -206,7 +230,9 @@ static void	child_proc(in_addr_t dest, int port_num, int *fd)
 			continue;
 		}
 		//thread start
-		if ((pthread_create(&(tid[t_idx].id), NULL, clnt_thread, &tid[t_idx])))
+		info.queue = &queue;
+		info.tid = &tid[t_idx];
+		if ((pthread_create(&(tid[t_idx].id), NULL, clnt_thread, &info)))
 		{
 			perror("failed to create thread.");
 			exit(1);
@@ -214,15 +240,11 @@ static void	child_proc(in_addr_t dest, int port_num, int *fd)
 		pthread_detach(tid[t_idx].id);
 		memset(buffer, 0, BUFFER_SIZE);
 	}
-	//check pigeon hole
-	while (check_pigeon_hole(tid))
-	{
-		sleep(1);
-	}
-	//free
 	close(fd[0]);
 	free(buffer);
-	pthread_mutex_destroy(&g_mutex);
+	pthread_mutex_destroy(&g_stream_mutex);
+	pthread_mutex_destroy(&g_mem_mutex);
+	del_queue(&queue);
 	exit(0);
 }
 

@@ -10,6 +10,7 @@ typedef struct s_tid
 	int	clnt_sock;
 	//protocol
 	int	method;
+	int	ver;
 	char	*url;
 	//thread
 	pthread_t	id;

@@ -11,7 +11,7 @@ CFLAGS = -Wall -Wextra -Werror -fsanitize=address -O3
 SRCS = ./server.c\
        ./listener.c\
        ./thread.c\
-       ./html.c\
+       ./http.c\
 
 OBJS = $(SRCS:.c=.o)
 
