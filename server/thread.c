@@ -6,7 +6,8 @@
 #include "thread.h"
 #include "http.h"
 
-static pthread_mutex_t	g_mutex;
+static pthread_mutex_t	g_mem_mutex;
+static pthread_mutex_t	g_stream_mutex;
 
 //thread
 static void	*clnt_thread(void *arg)
@@ -22,51 +23,62 @@ static void	*clnt_thread(void *arg)
 		pthread_exit(NULL);
 	}
 	memset(buffer, 0, BUFFER_SIZE);
-	//mutex lock
-	pthread_mutex_lock(&g_mutex);
+	
+	pthread_mutex_lock(&g_mem_mutex);
 	tid->free = 0;
-	//mutex unlock
-	pthread_mutex_unlock(&g_mutex);
+	pthread_mutex_unlock(&g_mem_mutex);
 	
 	//receive
-	recv(tid->clnt_sock, buffer, BUFFER_SIZE, 0);
-	//print
-	dprintf(2, "receive:%s", buffer);
-	
-	//parsing
-	pthread_mutex_lock(&g_mutex);
-	protocol_reader(buffer, tid);
-	pthread_mutex_unlock(&g_mutex);
-	//test delay
+	while (recv(tid->clnt_sock, buffer, BUFFER_SIZE, 0) != 0)
+	{
+		//print
+		pthread_mutex_lock(&g_stream_mutex);
+		dprintf(2, "[thread:%d][sock:%d]receive:%s", tid->idx, tid->clnt_sock, buffer);
+		pthread_mutex_unlock(&g_stream_mutex);
+		
+		//parsing
+		pthread_mutex_lock(&g_mem_mutex);
+		protocol_reader(buffer, tid);
+		pthread_mutex_unlock(&g_mem_mutex);
+		//test delay
 #if 1
-	sleep(5);
+		sleep(5);
 #endif
 
-	//send
-	out_buf = head_builder(tid->ver, 0);
-	dprintf(tid->clnt_sock, "%s", out_buf);
-	
-	//close socket
-	close(tid->clnt_sock);
+		//send
+		out_buf = head_builder(tid->ver, 0);
+		dprintf(tid->clnt_sock, "%s", out_buf);
+		
+		//close and free
+		free(out_buf);
+		//mutex lock
+		pthread_mutex_lock(&g_mem_mutex);
+		tid->method = 0;
+		free(tid->url);
+		tid->url = 0;
+		pthread_mutex_unlock(&g_mem_mutex);
+		memset(buffer, 0, BUFFER_SIZE);
+	}
 	
 	//close and free
-	free(buffer);
-	free(out_buf);
-	//mutex lock
-	pthread_mutex_lock(&g_mutex);
+	pthread_mutex_lock(&g_mem_mutex);
 	tid->free = 1;
-	tid->method = 0;
-	free(tid->url);
-	tid->url = 0;
-	//mutex unlock
-	pthread_mutex_unlock(&g_mutex);
+	pthread_mutex_unlock(&g_mem_mutex);
+	//close socket
+	close(tid->clnt_sock);
+	free(buffer);
 	pthread_exit(NULL);
 }
 
-static int	init_(pthread_mutex_t *mutex, t_tid *tid_lst)
+static int	init_(t_tid *tid_lst)
 {
 	//init mutex
-	if (pthread_mutex_init(mutex, NULL))
+	if (pthread_mutex_init(&g_mem_mutex, NULL))
+	{
+		perror("mutex init failed");
+		return -1;
+	}
+	if (pthread_mutex_init(&g_stream_mutex, NULL))
 	{
 		perror("mutex init failed");
 		return -1;
@@ -110,7 +122,7 @@ int	main_thread(int sock)
 
 	t_tid		tid[THREAD_POOL_SIZE];
 
-	if (init_(&g_mutex, tid) < 0)
+	if (init_(tid) < 0)
 		return -1;
 	//loop
 	while (1)
@@ -134,6 +146,7 @@ int	main_thread(int sock)
 		pthread_detach(tid[t_idx].id);
 	}
 	//free
-	pthread_mutex_destroy(&g_mutex);
+	pthread_mutex_destroy(&g_mem_mutex);
+	pthread_mutex_destroy(&g_stream_mutex);
 	return 1;
 }
